@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Smart Home Dashboard</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f4f4f4;
+            display: flex;
+            flex-direction: column; 
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        h1 {
+            margin-bottom: 20px;
+        }
+
+        .dashboard {
+            display: grid;
+            grid-template-rows: auto auto;
+            max-width: 1200px;
+            width: 100%;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #fff;
+            border-radius: 10px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+        }
+
+        .gauge-container {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            grid-gap: 20px;
+        }
+
+        .chart-switch-container {
+            display: grid;
+            grid-template-columns: 1fr 2fr;
+            grid-gap: 20px;
+            margin-top: 20px;
+        }
+
+        .switch-container {
+            background-color: #ffffff;
+            border-radius: 8px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+            padding: 20px;
+            text-align: center;
+        }
+
+        .switch-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        .switch-item label {
+            margin-top: 10px;
+            font-weight: bold;
+        }
+
+        .switch-item .switch {
+            margin-top: 10px;
+            position: relative;
+            display: inline-block;
+            width: 60px;
+            height: 34px;
+        }
+
+        .switch-item .switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+
+        .switch-item .slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: #ccc;
+            transition: 0.4s;
+            border-radius: 34px;
+        }
+
+        .switch-item .slider:before {
+            position: absolute;
+            content: "";
+            height: 26px;
+            width: 26px;
+            left: 4px;
+            bottom: 4px;
+            background-color: white;
+            transition: 0.4s;
+            border-radius: 50%;
+        }
+
+        .switch-item input:checked + .slider {
+            background-color: #2196F3;
+        }
+
+        .switch-item input:checked + .slider:before {
+            transform: translateX(26px);
+        }
+
+        .chart-container {
+            background-color: #ffffff;
+            border-radius: 8px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+            padding: 20px;
+            text-align: center;
+        }
+
+        .gauge-title {
+            margin-top: 10px;
+            font-weight: bold;
+        }
+
+        i {
+            color: #666;
+            margin-bottom: 10px;
+        }
+    </style>
+</head>
+<body>
+
+    <h1>Smart Home Dashboard</h1>
+
+    <div class="dashboard">
+        <div class="gauge-container">
+            <div class="gauge-container-item">
+                <i class="fas fa-thermometer-half fa-2x"></i>
+                <div id="gaugeTemp"></div>
+                <div class="gauge-title">Nhiệt độ</div>
+            </div>
+            <div class="gauge-container-item">
+                <i class="fas fa-tint fa-2x"></i>
+                <div id="gaugeHumidity"></div>
+                <div class="gauge-title">Độ ẩm</div>
+            </div>
+            <div class="gauge-container-item">
+                <i class="fas fa-sun fa-2x"></i>
+                <div id="gaugeLight"></div>
+                <div class="gauge-title">Ánh sáng</div>
+            </div>
+        </div>
+
+        <div class="chart-switch-container">
+            <div class="switch-container">
+                <div class="switch-item">
+                    <i class="fas fa-lightbulb fa-2x"></i>
+                    <label for="lightSwitch">Đèn</label>
+                    <label class="switch">
+                        <input type="checkbox" id="lightSwitch">
+                        <span class="slider"></span>
+                    </label>
+                </div>
+                <div class="switch-item">
+                    <i class="fas fa-fan fa-2x"></i>
+                    <label for="fanSwitch">Quạt</label>
+                    <label class="switch">
+                        <input type="checkbox" id="fanSwitch">
+                        <span class="slider"></span>
+                    </label>
+                </div>
+                <div class="switch-item">
+                    <i class="fas fa-snowflake fa-2x"></i>
+                    <label for="acSwitch">Điều hòa</label>
+                    <label class="switch">
+                        <input type="checkbox" id="acSwitch">
+                        <span class="slider"></span>
+                    </label>
+                </div>
+            </div>
+            <div class="chart-container">
+                <h3>Biểu đồ nhiệt độ, độ ẩm và ánh sáng</h3>
+                <canvas id="combinedChart"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/raphael@2.3.0/raphael.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/justgage@1.3.2/justgage.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
+    <script>
+        const socket = new WebSocket('ws://192.168.159.82:81');
+
+        socket.onopen = () => console.log('WebSocket connected');
+        socket.onmessage = (event) => {
+            const data = JSON.parse(event.data);
+            updateChart(data.time, data.temperature, data.humidity, data.light);
+            gaugeTemp.refresh(data.temperature);
+            gaugeHumidity.refresh(data.humidity);
+            gaugeLight.refresh(data.light);
+        };
+        socket.onerror = (error) => console.error('WebSocket error:', error);
+        socket.onclose = () => console.log('WebSocket disconnected');
+
+        function updateChart(time, temperature, humidity, light) {
+            if (combinedChart.data.labels.length >= 10) combinedChart.data.labels.shift();
+            combinedChart.data.labels.push(time);
+            ['temperature', 'humidity', 'light'].forEach((key, i) => {
+                if (combinedChart.data.datasets[i].data.length >= 10) combinedChart.data.datasets[i].data.shift();
+                combinedChart.data.datasets[i].data.push(data[key]);
+            });
+            combinedChart.update();
+        }
+
+        ['lightSwitch', 'fanSwitch', 'acSwitch'].forEach(id => {
+            document.getElementById(id).addEventListener('change', (e) => {
+                socket.send(JSON.stringify({ device: id, state: e.target.checked }));
+            });
+        });
+
+        const gaugeTemp = new JustGage({ id: 'gaugeTemp', value: 0, max: 50, title: 'Nhiệt độ (°C)' });
+        const gaugeHumidity = new JustGage({ id: 'gaugeHumidity', value: 0, max: 100, title: 'Độ ẩm (%)' });
+        const gaugeLight = new JustGage({ id: 'gaugeLight', value: 0, max: 1000, title: 'Ánh sáng (lux)' });
+
+        const combinedChart = new Chart(document.getElementById('combinedChart').getContext('2d'), {
+            type: 'line',
+            data: {
+                labels: [],
+                datasets: [
+                    { label: 'Nhiệt độ', data: [], borderColor: 'red' },
+                    { label: 'Độ ẩm', data: [], borderColor: 'blue' },
+                    { label: 'Ánh sáng', data: [], borderColor: 'yellow' }
+                ]
+            }
+        });
+    </script>
+</body>
+</html>
+
+
